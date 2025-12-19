@@ -515,18 +515,49 @@ const GestureController = ({ onGesture, onMove, onStatus, debugMode, onSelectPho
 export default function GrandTreeApp() {
   const [sceneState, setSceneState] = useState<'CHAOS' | 'FORMED'>('CHAOS');
   const [rotationSpeed, setRotationSpeed] = useState(0);
-  const [aiStatus, setAiStatus] = useState("INITIALIZING...");
+  const [aiStatus, setAiStatus] = useState("CHƯA BẮT ĐẦU");
   const [debugMode, setDebugMode] = useState(false);
   const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
+  const [isStarted, setIsStarted] = useState(false);
+
+  // Nhạc nền
+  useEffect(() => {
+    if (isStarted) {
+      const bgMusic = new Audio('/audio.mp3');
+      bgMusic.loop = true;
+      bgMusic.volume = 0.5;
+      bgMusic.play().catch(err => console.log('Không thể play nhạc:', err));
+    }
+  }, [isStarted]);
 
   return (
     <div style={{ width: '100vw', height: '100vh', backgroundColor: '#000', position: 'relative', overflow: 'hidden' }}>
-      <div style={{ width: '100%', height: '100%', position: 'absolute', top: 0, left: 0, zIndex: 1 }}>
-        <Canvas dpr={[1, 2]} gl={{ toneMapping: THREE.ReinhardToneMapping }} shadows>
-            <Experience sceneState={sceneState} rotationSpeed={rotationSpeed} />
-        </Canvas>
-      </div>
-      <GestureController onGesture={setSceneState} onMove={setRotationSpeed} onStatus={setAiStatus} debugMode={debugMode} onSelectPhoto={setSelectedPhoto} bodyPhotoPaths={bodyPhotoPaths} selectedPhoto={selectedPhoto} />
+      {!isStarted ? (
+        <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', flexDirection: 'column', backgroundColor: '#000' }}>
+          <h1 style={{ color: '#FFD700', fontSize: '3rem', marginBottom: '20px' }}>🎄 Cây Thông Noel Ma Thuật</h1>
+          <button onClick={() => setIsStarted(true)} style={{
+            background: 'linear-gradient(to bottom, #D32F2F, #8B0000)', 
+            color: '#FFF', border: '2px solid #FFD700',
+            padding: '15px 50px', borderRadius: '30px', 
+            fontWeight: '800', fontSize: '16px',
+            boxShadow: '0 0 30px rgba(255, 0, 0, 0.6)',
+            animation: 'pulse 1.5s infinite',
+            cursor: 'pointer'
+          }}>
+            BẮT ĐẦU MA THUẬT
+          </button>
+          <p style={{ color: 'rgba(255,255,255,0.6)', marginTop: '20px', textAlign: 'center' }}>
+            🖐 <b>Mở tay:</b> Phân tán &nbsp;|&nbsp; ✊ <b>Siết nắm đấm:</b> Tập hợp &nbsp;|&nbsp; 👋 <b>Chỉ tay:</b> Phóng to ảnh
+          </p>
+        </div>
+      ) : (
+        <>
+          <div style={{ width: '100%', height: '100%', position: 'absolute', top: 0, left: 0, zIndex: 1 }}>
+            <Canvas dpr={[1, 2]} gl={{ toneMapping: THREE.ReinhardToneMapping }} shadows>
+                <Experience sceneState={sceneState} rotationSpeed={rotationSpeed} />
+            </Canvas>
+          </div>
+          <GestureController onGesture={setSceneState} onMove={setRotationSpeed} onStatus={setAiStatus} debugMode={debugMode} onSelectPhoto={setSelectedPhoto} bodyPhotoPaths={bodyPhotoPaths} selectedPhoto={selectedPhoto} />
 
       {/* UI - Thống kê */}
       <div style={{ position: 'absolute', bottom: '30px', left: '40px', color: '#888', zIndex: 10, fontFamily: 'sans-serif', userSelect: 'none' }}>
@@ -557,6 +588,11 @@ export default function GrandTreeApp() {
       {/* UI - Trạng thái AI */}
       <div style={{ position: 'absolute', top: '20px', left: '50%', transform: 'translateX(-50%)', color: aiStatus.includes('LỖI') ? '#FF0000' : 'rgba(255, 215, 0, 0.4)', fontSize: '10px', letterSpacing: '2px', zIndex: 10, background: 'rgba(0,0,0,0.5)', padding: '4px 8px', borderRadius: '4px' }}>
         {aiStatus}
+      </div>
+
+      {/* Copyright */}
+      <div style={{ position: 'absolute', bottom: '10px', right: '15px', color: 'rgba(255,255,255,0.3)', fontSize: '12px', zIndex: 10, fontFamily: 'sans-serif', pointerEvents: 'none', fontStyle: 'italic' }}>
+        © by Pham Minh Kha
       </div>
 
       {/* Overlay ảnh phóng to */}
