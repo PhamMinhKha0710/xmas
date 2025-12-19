@@ -32,6 +32,35 @@ Dự án này không chỉ là một cây, mà là một phòng trưng bày tư�
 Mở terminal trong thư mục gốc của dự án, chạy: ```bash npm install
 ### 3. Khởi Động Dự Án
 npm run dev
+
+## 📖 Hướng Dẫn Sử Dụng
+
+Sau khi khởi động dự án, mở trình duyệt và truy cập địa chỉ `http://localhost:5173` (hoặc cổng mà Vite chỉ định).
+
+### Giao Diện Ứng Dụng
+- **Màn hình chính**: Hiển thị cây thông Noel 3D với các hạt, đèn, và ảnh lơ lửng.
+- **Thống kê (góc trái dưới)**: Hiển thị số lượng ảnh Polaroid và hạt lá cây.
+- **Nút điều khiển (góc phải dưới)**:
+  - **🛠 DEBUG**: Bật/tắt chế độ debug để xem hình camera và nhận dạng cử chỉ.
+  - **Lắp Ráp Cây / Phân Tán**: Chuyển đổi giữa trạng thái cây tập hợp và phân tán (cũng có thể dùng cử chỉ).
+- **Trạng thái AI (trên cùng)**: Hiển thị trạng thái của hệ thống nhận dạng cử chỉ (ví dụ: "AI SẴN SÀNG: HÃY GIỠ TAY").
+
+### Sử Dụng Cử Chỉ
+Đứng trước camera (đảm bảo quyền truy cập camera đã được cấp). Sử dụng cử chỉ để tương tác:
+- **Mở lòng bàn tay**: Phân tán cây thành các hạt bay lượn.
+- **Siết chặt nắm đấm**: Tập hợp tất cả thành cây hoàn chỉnh.
+- **Di chuyển tay trái/phải**: Xoay góc nhìn cây.
+- **Di chuyển tay lên/xuống**: Nghiêng góc nhìn.
+
+### Tùy Chỉnh Và Mở Rộng
+- Thay đổi ảnh trong `public/photos/` để cá nhân hóa.
+- Điều chỉnh cấu hình trong `src/App.tsx` để thay đổi màu sắc, số lượng, kích thước.
+- Sử dụng nút debug để kiểm tra camera và cử chỉ.
+
+### Lưu Ý
+- Đảm bảo ánh sáng tốt và tay rõ ràng để AI nhận dạng chính xác.
+- Ứng dụng yêu cầu camera để hoạt động đầy đủ; nếu không có, chỉ có thể sử dụng nút điều khiển.
+
 ### 🖼️ Tùy Chỉnh Ảnh
 ### 1. Chuẩn Bị Ảnh
 Tìm thư mục public/photos/ trong thư mục dự án.
