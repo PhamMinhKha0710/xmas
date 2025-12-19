@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef, useEffect, Suspense } from 'react';
+import React, { useState, useMemo, useRef, useEffect, Suspense } from 'react';
 import { Canvas, useFrame, extend } from '@react-three/fiber';
 import {
   OrbitControls,
@@ -16,12 +16,12 @@ import { MathUtils } from 'three';
 import * as random from 'maath/random';
 import { GestureRecognizer, FilesetResolver, DrawingUtils } from "@mediapipe/tasks-vision";
 
-// --- Tạo động danh sách ảnh (top.jpg + 1.jpg đến 31.jpg) ---
+// --- Tạo động danh sách ảnh (top.png + 1.png đến 31.png) ---
 const TOTAL_NUMBERED_PHOTOS = 31;
-// Sửa đổi: Thêm top.jpg vào đầu mảng
+// Sửa đổi: Thêm top.png vào đầu mảng
 const bodyPhotoPaths = [
-  '/photos/top.jpg',
-  ...Array.from({ length: TOTAL_NUMBERED_PHOTOS }, (_, i) => `/photos/${i + 1}.jpg`)
+  '/photos/top.png',
+  ...Array.from({ length: TOTAL_NUMBERED_PHOTOS }, (_, i) => `/photos/${i + 1}.png`)
 ];
 
 // --- Cấu hình thị giác ---
@@ -88,46 +88,12 @@ const getTreePosition = () => {
   return [r * Math.cos(theta), y, r * Math.sin(theta)];
 };
 
-// --- Component: Lá cây ---
-const Foliage = ({ state }: { state: 'CHAOS' | 'FORMED' }) => {
-  const materialRef = useRef<any>(null);
-  const { positions, targetPositions, randoms } = useMemo(() => {
-    const count = CONFIG.counts.foliage;
-    const positions = new Float32Array(count * 3); const targetPositions = new Float32Array(count * 3); const randoms = new Float32Array(count);
-    const spherePoints = random.inSphere(new Float32Array(count * 3), { radius: 25 }) as Float32Array;
-    for (let i = 0; i < count; i++) {
-      positions[i*3] = spherePoints[i*3]; positions[i*3+1] = spherePoints[i*3+1]; positions[i*3+2] = spherePoints[i*3+2];
-      const [tx, ty, tz] = getTreePosition();
-      targetPositions[i*3] = tx; targetPositions[i*3+1] = ty; targetPositions[i*3+2] = tz;
-      randoms[i] = Math.random();
-    }
-    return { positions, targetPositions, randoms };
-  }, []);
-  useFrame((rootState, delta) => {
-    if (materialRef.current) {
-      materialRef.current.uTime = rootState.clock.elapsedTime;
-      const targetProgress = state === 'FORMED' ? 1 : 0;
-      materialRef.current.uProgress = MathUtils.damp(materialRef.current.uProgress, targetProgress, 1.5, delta);
-    }
-  });
-  return (
-    <points>
-      <bufferGeometry>
-        <bufferAttribute attach="attributes-position" args={[positions, 3]} />
-        <bufferAttribute attach="attributes-aTargetPos" args={[targetPositions, 3]} />
-        <bufferAttribute attach="attributes-aRandom" args={[randoms, 1]} />
-      </bufferGeometry>
-      {/* @ts-ignore */}
-      <foliageMaterial ref={materialRef} transparent depthWrite={false} blending={THREE.AdditiveBlending} />
-    </points>
-  );
-};
-
-// --- Component: Trang trí ảnh (Polaroid hai mặt) ---
-const PhotoOrnaments = ({ state }: { state: 'CHAOS' | 'FORMED' }) => {
+// --- Component: Trang trí ảnh (Polaroid hai mặt) với hỗ trợ EXPLODE/PHOTO ---
+const PhotoOrnaments = ({ state, selectedPhotoIndex, camera }: { state: 'CHAOS' | 'FORMED' | 'HEART' | 'EXPLODE' | 'PHOTO', selectedPhotoIndex?: number, camera?: THREE.Camera }) => {
   const textures = useTexture(CONFIG.photos.body);
   const count = CONFIG.counts.ornaments;
   const groupRef = useRef<THREE.Group>(null);
+  const orbitRadius = 25;
 
   const borderGeometry = useMemo(() => new THREE.PlaneGeometry(1.2, 1.5), []);
   const photoGeometry = useMemo(() => new THREE.PlaneGeometry(1, 1), []);
@@ -140,6 +106,14 @@ const PhotoOrnaments = ({ state }: { state: 'CHAOS' | 'FORMED' }) => {
       const currentRadius = (rBase * (1 - (y + (h/2)) / h)) + 0.5;
       const theta = Math.random() * Math.PI * 2;
       const targetPos = new THREE.Vector3(currentRadius * Math.cos(theta), y, currentRadius * Math.sin(theta));
+
+      // Orbit position for EXPLODE mode
+      const orbitAngle = (i / count) * Math.PI * 2;
+      const orbitPos = new THREE.Vector3(
+        Math.sin(orbitAngle) * orbitRadius,
+        Math.sin(i * 0.5) * 3,
+        Math.cos(orbitAngle) * orbitRadius
+      );
 
       const isBig = Math.random() < 0.2;
       const baseScale = isBig ? 2.2 : 0.8 + Math.random() * 0.6;
@@ -154,51 +128,100 @@ const PhotoOrnaments = ({ state }: { state: 'CHAOS' | 'FORMED' }) => {
       const chaosRotation = new THREE.Euler(Math.random()*Math.PI, Math.random()*Math.PI, Math.random()*Math.PI);
 
       return {
-        chaosPos, targetPos, scale: baseScale, weight,
+        chaosPos, targetPos, orbitPos, scale: baseScale, weight,
         textureIndex: i % textures.length,
         borderColor,
         currentPos: chaosPos.clone(),
         chaosRotation,
         rotationSpeed,
         wobbleOffset: Math.random() * 10,
-        wobbleSpeed: 0.5 + Math.random() * 0.5
+        wobbleSpeed: 0.5 + Math.random() * 0.5,
+        orbitAngle
       };
     });
   }, [textures, count]);
 
   useFrame((stateObj, delta) => {
     if (!groupRef.current) return;
-    const isFormed = state === 'FORMED';
     const time = stateObj.clock.elapsedTime;
+    let target: THREE.Vector3;
+    let targetScale: number;
 
-    groupRef.current.children.forEach((group, i) => {
-      const objData = data[i];
-      const target = isFormed ? objData.targetPos : objData.chaosPos;
+    if (state === 'FORMED') {
+      groupRef.current.children.forEach((group, i) => {
+        const objData = data[i];
+        target = objData.targetPos;
+        targetScale = objData.scale;
+        objData.currentPos.lerp(target, delta * 0.8 * objData.weight);
+        group.position.copy(objData.currentPos);
+        group.scale.lerp(new THREE.Vector3(targetScale, targetScale, targetScale), delta * 2);
 
-      objData.currentPos.lerp(target, delta * (isFormed ? 0.8 * objData.weight : 0.5));
-      group.position.copy(objData.currentPos);
+        const targetLookPos = new THREE.Vector3(group.position.x * 2, group.position.y + 0.5, group.position.z * 2);
+        group.lookAt(targetLookPos);
+        const wobbleX = Math.sin(time * objData.wobbleSpeed + objData.wobbleOffset) * 0.05;
+        const wobbleZ = Math.cos(time * objData.wobbleSpeed * 0.8 + objData.wobbleOffset) * 0.05;
+        group.rotation.x += wobbleX;
+        group.rotation.z += wobbleZ;
+      });
+    } else if (state === 'EXPLODE') {
+      const baseAngle = groupRef.current.rotation.y;
+      groupRef.current.rotation.y += delta * 0.3;
 
-      if (isFormed) {
-         const targetLookPos = new THREE.Vector3(group.position.x * 2, group.position.y + 0.5, group.position.z * 2);
-         group.lookAt(targetLookPos);
+      groupRef.current.children.forEach((group, i) => {
+        const objData = data[i];
+        const angle = baseAngle + objData.orbitAngle;
+        const orbitPos = new THREE.Vector3(
+          Math.sin(angle) * orbitRadius,
+          Math.sin(time + i) * 3,
+          Math.cos(angle) * orbitRadius
+        );
+        target = orbitPos;
+        objData.currentPos.lerp(target, delta * 2);
+        group.position.copy(objData.currentPos);
+        if (camera) group.lookAt(camera.position);
 
-         const wobbleX = Math.sin(time * objData.wobbleSpeed + objData.wobbleOffset) * 0.05;
-         const wobbleZ = Math.cos(time * objData.wobbleSpeed * 0.8 + objData.wobbleOffset) * 0.05;
-         group.rotation.x += wobbleX;
-         group.rotation.z += wobbleZ;
-
-      } else {
-         group.rotation.x += delta * objData.rotationSpeed.x;
-         group.rotation.y += delta * objData.rotationSpeed.y;
-         group.rotation.z += delta * objData.rotationSpeed.z;
-      }
-    });
+        const z = group.position.z;
+        targetScale = z > 5 ? 0.6 + (z / orbitRadius) * 0.8 : 0.6;
+        group.scale.lerp(new THREE.Vector3(targetScale, targetScale, targetScale), delta * 2);
+      });
+    } else if (state === 'PHOTO' && selectedPhotoIndex !== undefined) {
+      groupRef.current.children.forEach((group, i) => {
+        const objData = data[i];
+        if (i === selectedPhotoIndex) {
+          target = new THREE.Vector3(0, 0, 60);
+          targetScale = 5;
+          objData.currentPos.lerp(target, delta * 2);
+          group.position.copy(objData.currentPos);
+          group.scale.lerp(new THREE.Vector3(targetScale, targetScale, targetScale), delta * 2);
+          if (camera) {
+            group.lookAt(camera.position);
+            group.rotation.z = 0;
+          }
+        } else {
+          targetScale = 0;
+          group.scale.lerp(new THREE.Vector3(targetScale, targetScale, targetScale), delta * 3);
+        }
+      });
+    } else {
+      // CHAOS or HEART
+      groupRef.current.children.forEach((group, i) => {
+        const objData = data[i];
+        target = objData.chaosPos;
+        targetScale = 0;
+        objData.currentPos.lerp(target, delta * 0.5);
+        group.position.copy(objData.currentPos);
+        group.scale.lerp(new THREE.Vector3(targetScale, targetScale, targetScale), delta * 2);
+        group.rotation.x += delta * objData.rotationSpeed.x;
+        group.rotation.y += delta * objData.rotationSpeed.y;
+        group.rotation.z += delta * objData.rotationSpeed.z;
+      });
+    }
   });
 
   return (
     <group ref={groupRef}>
       {data.map((obj, i) => (
-        <group key={i} scale={[obj.scale, obj.scale, obj.scale]} rotation={state === 'CHAOS' ? obj.chaosRotation : [0,0,0]}>
+        <group key={i} scale={state === 'PHOTO' && i !== selectedPhotoIndex ? [0, 0, 0] : [obj.scale, obj.scale, obj.scale]} rotation={state === 'CHAOS' || state === 'HEART' ? obj.chaosRotation : [0,0,0]}>
           {/* 正面 */}
           <group position={[0, 0, 0.015]}>
             <mesh geometry={photoGeometry}>
@@ -234,7 +257,7 @@ const PhotoOrnaments = ({ state }: { state: 'CHAOS' | 'FORMED' }) => {
 };
 
 // --- Component: Yếu tố Giáng sinh ---
-const ChristmasElements = ({ state }: { state: 'CHAOS' | 'FORMED' }) => {
+const ChristmasElements = ({ state }: { state: 'CHAOS' | 'FORMED' | 'HEART' | 'EXPLODE' | 'PHOTO' }) => {
   const count = CONFIG.counts.elements;
   const groupRef = useRef<THREE.Group>(null);
 
@@ -289,7 +312,7 @@ const ChristmasElements = ({ state }: { state: 'CHAOS' | 'FORMED' }) => {
 };
 
 // --- Component: Đèn tiên ---
-const FairyLights = ({ state }: { state: 'CHAOS' | 'FORMED' }) => {
+const FairyLights = ({ state }: { state: 'CHAOS' | 'FORMED' | 'HEART' | 'EXPLODE' | 'PHOTO' }) => {
   const count = CONFIG.counts.lights;
   const groupRef = useRef<THREE.Group>(null);
   const geometry = useMemo(() => new THREE.SphereGeometry(0.8, 8, 8), []);
@@ -331,7 +354,7 @@ const FairyLights = ({ state }: { state: 'CHAOS' | 'FORMED' }) => {
 };
 
 // --- Component: Ngôi sao trên đỉnh (Không có ảnh, Ngôi sao vàng 3D nguyên chất) ---
-const TopStar = ({ state }: { state: 'CHAOS' | 'FORMED' }) => {
+const TopStar = ({ state }: { state: 'CHAOS' | 'FORMED' | 'HEART' | 'EXPLODE' | 'PHOTO' }) => {
   const groupRef = useRef<THREE.Group>(null);
 
   const starShape = useMemo(() => {
@@ -379,9 +402,179 @@ const TopStar = ({ state }: { state: 'CHAOS' | 'FORMED' }) => {
   );
 };
 
+// --- Component: Text "MERRY CHRISTMAS" ---
+const MerryChristmasText = ({ visible }: { visible: boolean }) => {
+  const meshRef = useRef<THREE.Mesh>(null);
+  const texture = useMemo(() => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 1024; canvas.height = 256;
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.font = 'bold italic 90px "Times New Roman"';
+      ctx.fillStyle = '#FFD700';
+      ctx.textAlign = 'center';
+      ctx.shadowColor = '#FF0000';
+      ctx.shadowBlur = 40;
+      ctx.fillText('MERRY CHRISTMAS', 512, 130);
+    }
+    return new THREE.CanvasTexture(canvas);
+  }, []);
+
+  useFrame((state) => {
+    if (meshRef.current) {
+      meshRef.current.visible = visible;
+      if (visible) {
+        meshRef.current.scale.lerp(new THREE.Vector3(1, 1, 1), 0.1);
+        const material = meshRef.current.material as THREE.MeshBasicMaterial;
+        if (material) {
+          material.opacity = 0.7 + 0.3 * Math.sin(state.clock.elapsedTime * 2);
+        }
+      } else {
+        meshRef.current.scale.lerp(new THREE.Vector3(0, 0, 0), 0.1);
+      }
+    }
+  });
+
+  return (
+    <mesh ref={meshRef} position={[0, CONFIG.tree.height / 2 + 8, 0]} scale={[0, 0, 0]}>
+      <planeGeometry args={[60, 15]} />
+      <meshBasicMaterial map={texture} transparent blending={THREE.AdditiveBlending} />
+    </mesh>
+  );
+};
+
+// --- Component: Text "I LOVE YOU" ---
+const LoveText = ({ visible }: { visible: boolean }) => {
+  const meshRef = useRef<THREE.Mesh>(null);
+  const texture = useMemo(() => {
+    const canvas = document.createElement('canvas');
+    canvas.width = 1024; canvas.height = 256;
+    const ctx = canvas.getContext('2d');
+    if (ctx) {
+      ctx.font = 'bold 120px "Segoe UI", sans-serif';
+      ctx.fillStyle = '#FF69B4';
+      ctx.textAlign = 'center';
+      ctx.shadowColor = '#FF1493';
+      ctx.shadowBlur = 40;
+      ctx.fillText('I LOVE YOU ❤️', 512, 130);
+    }
+    return new THREE.CanvasTexture(canvas);
+  }, []);
+
+  useFrame((state) => {
+    if (meshRef.current) {
+      meshRef.current.visible = visible;
+      if (visible) {
+        const beatScale = 1 + Math.abs(Math.sin(state.clock.elapsedTime * 3)) * 0.15;
+        meshRef.current.scale.set(beatScale, beatScale, 1);
+      } else {
+        meshRef.current.scale.lerp(new THREE.Vector3(0, 0, 0), 0.1);
+      }
+    }
+  });
+
+  return (
+    <mesh ref={meshRef} position={[0, 0, 20]} scale={[0, 0, 0]}>
+      <planeGeometry args={[70, 18]} />
+      <meshBasicMaterial map={texture} transparent blending={THREE.AdditiveBlending} />
+    </mesh>
+  );
+};
+
+// --- Helper: Heart shape position ---
+const getHeartPosition = (index: number, total: number) => {
+  const t = (index / total) * Math.PI * 2;
+  const hx = 16 * Math.pow(Math.sin(t), 3);
+  const hy = 13 * Math.cos(t) - 5 * Math.cos(2*t) - 2 * Math.cos(3*t) - Math.cos(4*t);
+  const rFill = Math.pow(Math.random(), 0.3);
+  const scaleH = 2.2;
+  return [
+    hx * scaleH * rFill,
+    hy * scaleH * rFill + 5,
+    (Math.random() - 0.5) * 8 * rFill
+  ];
+};
+
+// --- Component: Lá cây với hỗ trợ HEART ---
+const Foliage = ({ state }: { state: 'CHAOS' | 'FORMED' | 'HEART' }) => {
+  const materialRef = useRef<any>(null);
+  const { positions, targetPositions, heartPositions, randoms } = useMemo(() => {
+    const count = CONFIG.counts.foliage;
+    const positions = new Float32Array(count * 3);
+    const targetPositions = new Float32Array(count * 3);
+    const heartPositions = new Float32Array(count * 3);
+    const randoms = new Float32Array(count);
+    const spherePoints = random.inSphere(new Float32Array(count * 3), { radius: 25 }) as Float32Array;
+    for (let i = 0; i < count; i++) {
+      positions[i*3] = spherePoints[i*3];
+      positions[i*3+1] = spherePoints[i*3+1];
+      positions[i*3+2] = spherePoints[i*3+2];
+      const [tx, ty, tz] = getTreePosition();
+      targetPositions[i*3] = tx;
+      targetPositions[i*3+1] = ty;
+      targetPositions[i*3+2] = tz;
+      const [hx, hy, hz] = getHeartPosition(i, count);
+      heartPositions[i*3] = hx;
+      heartPositions[i*3+1] = hy;
+      heartPositions[i*3+2] = hz;
+      randoms[i] = Math.random();
+    }
+    return { positions, targetPositions, heartPositions, randoms };
+  }, []);
+  
+  const pointsRef = useRef<THREE.Points>(null);
+  
+  useFrame((rootState, delta) => {
+    if (materialRef.current) {
+      materialRef.current.uTime = rootState.clock.elapsedTime;
+      let targetProgress = 0;
+      if (state === 'FORMED') targetProgress = 1;
+      else if (state === 'HEART') targetProgress = 0.5; // Intermediate for heart
+      materialRef.current.uProgress = MathUtils.damp(materialRef.current.uProgress, targetProgress, 1.5, delta);
+    }
+    
+    // Update positions for heart shape
+    if (state === 'HEART' && pointsRef.current) {
+      const geometry = pointsRef.current.geometry;
+      const posAttr = geometry.attributes.position;
+      const heartAttr = geometry.attributes.aHeartPos;
+      if (heartAttr && posAttr) {
+        for (let i = 0; i < posAttr.count; i++) {
+          const t = materialRef.current?.uProgress || 0.5;
+          const currentX = posAttr.array[i*3];
+          const currentY = posAttr.array[i*3+1];
+          const currentZ = posAttr.array[i*3+2];
+          const heartX = heartAttr.array[i*3];
+          const heartY = heartAttr.array[i*3+1];
+          const heartZ = heartAttr.array[i*3+2];
+          posAttr.array[i*3] = THREE.MathUtils.lerp(currentX, heartX, t);
+          posAttr.array[i*3+1] = THREE.MathUtils.lerp(currentY, heartY, t);
+          posAttr.array[i*3+2] = THREE.MathUtils.lerp(currentZ, heartZ, t);
+        }
+        posAttr.needsUpdate = true;
+      }
+    }
+  });
+
+  return (
+    <points ref={pointsRef}>
+      <bufferGeometry>
+        <bufferAttribute attach="attributes-position" args={[positions, 3]} />
+        <bufferAttribute attach="attributes-aTargetPos" args={[targetPositions, 3]} />
+        <bufferAttribute attach="attributes-aHeartPos" args={[heartPositions, 3]} />
+        <bufferAttribute attach="attributes-aRandom" args={[randoms, 1]} />
+      </bufferGeometry>
+      {/* @ts-ignore */}
+      <foliageMaterial ref={materialRef} transparent depthWrite={false} blending={THREE.AdditiveBlending} />
+    </points>
+  );
+};
+
 // --- Trải nghiệm cảnh chính ---
-const Experience = ({ sceneState, rotationSpeed }: { sceneState: 'CHAOS' | 'FORMED', rotationSpeed: number }) => {
+const Experience = ({ sceneState, rotationSpeed, selectedPhotoIndex }: { sceneState: 'CHAOS' | 'FORMED' | 'HEART' | 'EXPLODE' | 'PHOTO', rotationSpeed: number, selectedPhotoIndex?: number }) => {
   const controlsRef = useRef<any>(null);
+  const cameraRef = useRef<THREE.PerspectiveCamera>(null);
+
   useFrame(() => {
     if (controlsRef.current) {
       controlsRef.current.setAzimuthalAngle(controlsRef.current.getAzimuthalAngle() + rotationSpeed);
@@ -391,7 +584,7 @@ const Experience = ({ sceneState, rotationSpeed }: { sceneState: 'CHAOS' | 'FORM
 
   return (
     <>
-      <PerspectiveCamera makeDefault position={[0, 8, 60]} fov={45} />
+      <PerspectiveCamera ref={cameraRef} makeDefault position={[0, 8, 60]} fov={45} />
       <OrbitControls ref={controlsRef} enablePan={false} enableZoom={true} minDistance={30} maxDistance={120} autoRotate={rotationSpeed === 0 && sceneState === 'FORMED'} autoRotateSpeed={0.3} maxPolarAngle={Math.PI / 1.7} />
 
       <color attach="background" args={['#000300']} />
@@ -404,15 +597,19 @@ const Experience = ({ sceneState, rotationSpeed }: { sceneState: 'CHAOS' | 'FORM
       <pointLight position={[0, -20, 10]} intensity={30} color="#ffffff" />
 
       <group position={[0, -6, 0]}>
-        <Foliage state={sceneState} />
+        <Foliage state={sceneState === 'HEART' ? 'HEART' : sceneState === 'FORMED' ? 'FORMED' : 'CHAOS'} />
         <Suspense fallback={null}>
-           <PhotoOrnaments state={sceneState} />
-           <ChristmasElements state={sceneState} />
-           <FairyLights state={sceneState} />
-           <TopStar state={sceneState} />
+           <PhotoOrnaments state={sceneState} selectedPhotoIndex={selectedPhotoIndex} camera={cameraRef.current || undefined} />
+           <ChristmasElements state={sceneState === 'HEART' ? 'CHAOS' : sceneState} />
+           <FairyLights state={sceneState === 'HEART' ? 'CHAOS' : sceneState} />
+           <TopStar state={sceneState === 'HEART' || sceneState === 'EXPLODE' || sceneState === 'PHOTO' ? 'CHAOS' : sceneState} />
         </Suspense>
         <Sparkles count={600} scale={50} size={8} speed={0.4} opacity={0.4} color={CONFIG.colors.silver} />
       </group>
+
+      {/* Text Components */}
+      <MerryChristmasText visible={sceneState === 'FORMED'} />
+      <LoveText visible={sceneState === 'HEART'} />
 
       <EffectComposer>
         <Bloom luminanceThreshold={0.8} luminanceSmoothing={0.1} intensity={1.5} radius={0.5} mipmapBlur />
@@ -424,7 +621,7 @@ const Experience = ({ sceneState, rotationSpeed }: { sceneState: 'CHAOS' | 'FORM
 
 // --- Bộ điều khiển cử chỉ ---
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const GestureController = ({ onGesture, onMove, onStatus, debugMode, onSelectPhoto, bodyPhotoPaths, selectedPhoto }: any) => {
+const GestureController = ({ onGesture, onMove, onStatus, debugMode, onSelectPhoto, bodyPhotoPaths, selectedPhoto, sceneState }: any) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -442,7 +639,7 @@ const GestureController = ({ onGesture, onMove, onStatus, debugMode, onSelectPho
             delegate: "GPU"
           },
           runningMode: "VIDEO",
-          numHands: 1
+          numHands: 2  // Support two hands for heart gesture
         });
         onStatus("ĐANG YÊU CẦU CAMERA...");
         if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
@@ -466,59 +663,169 @@ const GestureController = ({ onGesture, onMove, onStatus, debugMode, onSelectPho
         if (videoRef.current.videoWidth > 0) {
             const results = gestureRecognizer.recognizeForVideo(videoRef.current, Date.now());
             const ctx = canvasRef.current.getContext("2d");
-            if (ctx && debugMode) {
-                ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
-                canvasRef.current.width = videoRef.current.videoWidth; canvasRef.current.height = videoRef.current.videoHeight;
-                if (results.landmarks) for (const landmarks of results.landmarks) {
-                        const drawingUtils = new DrawingUtils(ctx);
-                        drawingUtils.drawConnectors(landmarks, GestureRecognizer.HAND_CONNECTIONS, { color: "#FFD700", lineWidth: 2 });
-                        drawingUtils.drawLandmarks(landmarks, { color: "#FF0000", lineWidth: 1 });
+            
+            // Luôn vẽ camera preview và landmarks
+            if (ctx && canvasRef.current) {
+                // Chỉ set kích thước canvas một lần khi video sẵn sàng
+                if (canvasRef.current.width !== videoRef.current.videoWidth || 
+                    canvasRef.current.height !== videoRef.current.videoHeight) {
+                    canvasRef.current.width = videoRef.current.videoWidth;
+                    canvasRef.current.height = videoRef.current.videoHeight;
                 }
-            } else if (ctx && !debugMode) ctx.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+                
+                // Vẽ video frame trước (nền)
+                ctx.drawImage(videoRef.current, 0, 0, canvasRef.current.width, canvasRef.current.height);
+                
+                // Vẽ landmarks với chấm sáng
+                if (results.landmarks) {
+                    const canvasWidth = canvasRef.current.width;
+                    const canvasHeight = canvasRef.current.height;
+                    for (const landmarks of results.landmarks) {
+                        const drawingUtils = new DrawingUtils(ctx);
+                        // Vẽ đường nối với màu vàng sáng
+                        drawingUtils.drawConnectors(landmarks, GestureRecognizer.HAND_CONNECTIONS, { 
+                            color: "#FFD700", 
+                            lineWidth: 2 
+                        });
+                        // Vẽ landmarks với chấm sáng
+                        landmarks.forEach((landmark, idx) => {
+                            const x = landmark.x * canvasWidth;
+                            const y = landmark.y * canvasHeight;
+                            
+                            // Tạo hiệu ứng chấm sáng
+                            const gradient = ctx.createRadialGradient(x, y, 0, x, y, 8);
+                            gradient.addColorStop(0, '#FFFFFF');
+                            gradient.addColorStop(0.3, '#FFD700');
+                            gradient.addColorStop(1, 'rgba(255, 215, 0, 0)');
+                            
+                            ctx.fillStyle = gradient;
+                            ctx.beginPath();
+                            ctx.arc(x, y, 8, 0, Math.PI * 2);
+                            ctx.fill();
+                            
+                            // Vẽ điểm trung tâm
+                            ctx.fillStyle = idx === 9 ? '#FF0000' : '#00FF00'; // Wrist màu đỏ, các điểm khác màu xanh
+                            ctx.beginPath();
+                            ctx.arc(x, y, 3, 0, Math.PI * 2);
+                            ctx.fill();
+                        });
+                    }
+                }
+            }
+
+            // Check for heart gesture (two hands close together)
+            if (results.landmarks && results.landmarks.length === 2) {
+              const h1 = results.landmarks[0];
+              const h2 = results.landmarks[1];
+              const distIndex = Math.hypot(h1[8].x - h2[8].x, h1[8].y - h2[8].y);
+              const distThumb = Math.hypot(h1[4].x - h2[4].x, h1[4].y - h2[4].y);
+              if (distIndex < 0.15 && distThumb < 0.15) {
+                onGesture("HEART");
+                if (debugMode) onStatus("PHÁT HIỆN: HEART ❤️");
+              }
+            }
 
             if (results.gestures.length > 0) {
               const name = results.gestures[0][0].categoryName; const score = results.gestures[0][0].score;
               if (score > 0.4) {
-                 if (name === "Open_Palm") onGesture("CHAOS"); if (name === "Closed_Fist") onGesture("FORMED");
-                 if (name === "Pointing_Up") onSelectPhoto(bodyPhotoPaths[Math.floor(Math.random() * bodyPhotoPaths.length)].replace('/photos/', '')); // Phóng to ảnh ngẫu nhiên khi chỉ tay
+                 if (name === "Open_Palm") onGesture("EXPLODE");
+                 if (name === "Closed_Fist") onGesture("FORMED");
+                 if (name === "Pointing_Up") {
+                   // Chuyển sang chế độ PHOTO và chọn ảnh dựa trên vị trí tay
+                   onGesture("PHOTO");
+                 }
+                 if (name === "Thumb_Up") {
+                   onGesture("FORMED");
+                   onSelectPhoto(undefined);
+                 }
                  if (debugMode) onStatus(`PHÁT HIỆN: ${name}`);
               }
               if (results.landmarks.length > 0) {
-                if (selectedPhoto) {
-                  const x = results.landmarks[0][0].x;
-                  const index = Math.floor(x * bodyPhotoPaths.length);
-                  const clampedIndex = Math.min(Math.max(index, 0), bodyPhotoPaths.length - 1);
-                  onSelectPhoto(bodyPhotoPaths[clampedIndex].replace('/photos/', ''));
+                const wristX = results.landmarks[0][9].x; // Wrist position (0-1)
+                
+                if (sceneState === 'PHOTO' || name === "Pointing_Up") {
+                  // Ở chế độ PHOTO: điều khiển chọn ảnh bằng tay trái/phải
+                  // Tay sang phải (x > 0.5): ảnh 1-15
+                  // Tay sang trái (x < 0.5): ảnh 15-31
+                  let photoIndex: number;
+                  if (wristX > 0.5) {
+                    // Tay phải: ảnh từ 1 đến 15 (index 1-15 trong mảng, bỏ qua top.png ở index 0)
+                    photoIndex = Math.floor((wristX - 0.5) * 2 * 15) + 1;
+                    photoIndex = Math.min(Math.max(photoIndex, 1), 15);
+                  } else {
+                    // Tay trái: ảnh từ 16 đến 31 (index 16-31 trong mảng)
+                    photoIndex = Math.floor(wristX * 2 * 16) + 16;
+                    photoIndex = Math.min(Math.max(photoIndex, 16), 31);
+                  }
+                  onSelectPhoto(photoIndex);
+                  onGesture("PHOTO");
                 } else {
-                  const speed = (0.5 - results.landmarks[0][0].x) * 0.15;
+                  // Chế độ khác: điều khiển xoay cây
+                  const speed = (0.5 - wristX) * 0.15;
                   onMove(Math.abs(speed) > 0.01 ? speed : 0);
                 }
               }
-            } else { onMove(0); if (debugMode) onStatus("AI SẴN SÀNG: KHÔNG CÓ TAY"); }
+            } else { 
+              onMove(0); 
+              if (debugMode) onStatus("AI SẴN SÀNG: KHÔNG CÓ TAY"); 
+            }
         }
         requestRef = requestAnimationFrame(predictWebcam);
       }
     };
     setup();
-    return () => cancelAnimationFrame(requestRef);
-  }, [onGesture, onMove, onStatus, debugMode]);
+    return () => {
+      if (requestRef) cancelAnimationFrame(requestRef);
+      if (videoRef.current?.srcObject) {
+        const stream = videoRef.current.srcObject as MediaStream;
+        stream.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, [onGesture, onMove, onStatus, debugMode, onSelectPhoto, bodyPhotoPaths, selectedPhoto, sceneState]);
 
   return (
     <>
-      <video ref={videoRef} style={{ opacity: debugMode ? 0.6 : 0, position: 'fixed', top: 0, right: 0, width: debugMode ? '320px' : '1px', zIndex: debugMode ? 100 : -1, pointerEvents: 'none', transform: 'scaleX(-1)' }} playsInline muted autoPlay />
-      <canvas ref={canvasRef} style={{ position: 'fixed', top: 0, right: 0, width: debugMode ? '320px' : '1px', height: debugMode ? 'auto' : '1px', zIndex: debugMode ? 101 : -1, pointerEvents: 'none', transform: 'scaleX(-1)' }} />
+      <video ref={videoRef} style={{ 
+        opacity: 0, 
+        position: 'fixed', 
+        top: 0, 
+        right: 0, 
+        width: '1px', 
+        zIndex: -1, 
+        pointerEvents: 'none', 
+        transform: 'scaleX(-1)' 
+      }} playsInline muted autoPlay />
+      <canvas ref={canvasRef} style={{ 
+        position: 'fixed', 
+        top: '15px', 
+        right: '15px', 
+        width: '320px', 
+        height: '240px', 
+        zIndex: 100, 
+        pointerEvents: 'none', 
+        transform: 'scaleX(-1)',
+        border: '3px solid rgba(255, 215, 0, 0.8)',
+        borderRadius: '12px',
+        boxShadow: '0 0 20px rgba(255, 215, 0, 0.5)',
+        backgroundColor: '#000',
+        imageRendering: 'auto',
+        willChange: 'contents'
+      }} />
     </>
   );
 };
 
 // --- Điểm vào ứng dụng ---
 export default function GrandTreeApp() {
-  const [sceneState, setSceneState] = useState<'CHAOS' | 'FORMED'>('CHAOS');
+  const [sceneState, setSceneState] = useState<'CHAOS' | 'FORMED' | 'HEART' | 'EXPLODE' | 'PHOTO'>('CHAOS');
   const [rotationSpeed, setRotationSpeed] = useState(0);
   const [aiStatus, setAiStatus] = useState("CHƯA BẮT ĐẦU");
   const [debugMode, setDebugMode] = useState(false);
-  const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
+  const [selectedPhotoIndex, setSelectedPhotoIndex] = useState<number | undefined>(undefined);
   const [isStarted, setIsStarted] = useState(false);
+  const [photoTransition, setPhotoTransition] = useState<'fadeIn' | 'fadeOut' | 'none'>('none');
+  const [prevPhotoIndex, setPrevPhotoIndex] = useState<number | undefined>(undefined);
+  const [slideDirection, setSlideDirection] = useState<'left' | 'right' | 'none'>('none');
 
   // Nhạc nền
   useEffect(() => {
@@ -529,6 +836,31 @@ export default function GrandTreeApp() {
       bgMusic.play().catch(err => console.log('Không thể play nhạc:', err));
     }
   }, [isStarted]);
+
+  // Hiệu ứng chuyển đổi ảnh
+  useEffect(() => {
+    if (selectedPhotoIndex !== undefined && selectedPhotoIndex !== prevPhotoIndex && prevPhotoIndex !== undefined) {
+      // Xác định hướng slide dựa trên việc ảnh tăng hay giảm
+      const direction = selectedPhotoIndex > prevPhotoIndex ? 'right' : 'left';
+      setSlideDirection(direction);
+      setPhotoTransition('fadeOut');
+      setTimeout(() => {
+        setPrevPhotoIndex(selectedPhotoIndex);
+        setPhotoTransition('fadeIn');
+        setTimeout(() => {
+          setPhotoTransition('none');
+          setSlideDirection('none');
+        }, 400);
+      }, 200);
+    } else if (selectedPhotoIndex !== undefined && prevPhotoIndex === undefined) {
+      // Lần đầu hiển thị
+      setPrevPhotoIndex(selectedPhotoIndex);
+      setPhotoTransition('fadeIn');
+      setTimeout(() => {
+        setPhotoTransition('none');
+      }, 400);
+    }
+  }, [selectedPhotoIndex, prevPhotoIndex]);
 
   return (
     <div style={{ width: '100vw', height: '100vh', backgroundColor: '#000', position: 'relative', overflow: 'hidden' }}>
@@ -541,23 +873,22 @@ export default function GrandTreeApp() {
             padding: '15px 50px', borderRadius: '30px', 
             fontWeight: '800', fontSize: '16px',
             boxShadow: '0 0 30px rgba(255, 0, 0, 0.6)',
-            animation: 'pulse 1.5s infinite',
             cursor: 'pointer'
           }}>
             BẮT ĐẦU MA THUẬT
           </button>
-          <p style={{ color: 'rgba(255,255,255,0.6)', marginTop: '20px', textAlign: 'center' }}>
-            🖐 <b>Mở tay:</b> Phân tán &nbsp;|&nbsp; ✊ <b>Siết nắm đấm:</b> Tập hợp &nbsp;|&nbsp; 👋 <b>Chỉ tay:</b> Phóng to ảnh
+          <p style={{ color: 'rgba(255,255,255,0.6)', marginTop: '20px', textAlign: 'center', maxWidth: '800px', lineHeight: '1.8' }}>
+            🖐 <b>Mở tay:</b> Quỹ đạo ảnh &nbsp;|&nbsp; ✊ <b>Siết nắm đấm:</b> Tập hợp cây &nbsp;|&nbsp; 👋 <b>Chỉ tay:</b> Phóng to ảnh &nbsp;|&nbsp; ❤️ <b>Hai tay trái tim:</b> Hình trái tim
           </p>
         </div>
       ) : (
-        <>
+        <React.Fragment>
           <div style={{ width: '100%', height: '100%', position: 'absolute', top: 0, left: 0, zIndex: 1 }}>
             <Canvas dpr={[1, 2]} gl={{ toneMapping: THREE.ReinhardToneMapping }} shadows>
-                <Experience sceneState={sceneState} rotationSpeed={rotationSpeed} />
+                <Experience sceneState={sceneState} rotationSpeed={rotationSpeed} selectedPhotoIndex={selectedPhotoIndex} />
             </Canvas>
           </div>
-          <GestureController onGesture={setSceneState} onMove={setRotationSpeed} onStatus={setAiStatus} debugMode={debugMode} onSelectPhoto={setSelectedPhoto} bodyPhotoPaths={bodyPhotoPaths} selectedPhoto={selectedPhoto} />
+          <GestureController onGesture={setSceneState} onMove={setRotationSpeed} onStatus={setAiStatus} debugMode={debugMode} onSelectPhoto={setSelectedPhotoIndex} bodyPhotoPaths={bodyPhotoPaths} selectedPhoto={selectedPhotoIndex} sceneState={sceneState} />
 
       {/* UI - Thống kê */}
       <div style={{ position: 'absolute', bottom: '30px', left: '40px', color: '#888', zIndex: 10, fontFamily: 'sans-serif', userSelect: 'none' }}>
@@ -580,8 +911,21 @@ export default function GrandTreeApp() {
         <button onClick={() => setDebugMode(!debugMode)} style={{ padding: '12px 15px', backgroundColor: debugMode ? '#FFD700' : 'rgba(0,0,0,0.5)', border: '1px solid #FFD700', color: debugMode ? '#000' : '#FFD700', fontFamily: 'sans-serif', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer', backdropFilter: 'blur(4px)' }}>
            {debugMode ? 'ẨN DEBUG' : '🛠 DEBUG'}
         </button>
-        <button onClick={() => setSceneState(s => s === 'CHAOS' ? 'FORMED' : 'CHAOS')} style={{ padding: '12px 30px', backgroundColor: 'rgba(0,0,0,0.5)', border: '1px solid rgba(255, 215, 0, 0.5)', color: '#FFD700', fontFamily: 'serif', fontSize: '14px', fontWeight: 'bold', letterSpacing: '3px', textTransform: 'uppercase', cursor: 'pointer', backdropFilter: 'blur(4px)' }}>
-           {sceneState === 'CHAOS' ? 'Lắp Ráp Cây' : 'Phân Tán'}
+        <button onClick={() => {
+          if (sceneState === 'CHAOS' || sceneState === 'EXPLODE' || sceneState === 'HEART' || sceneState === 'PHOTO') {
+            setSceneState('FORMED');
+            setSelectedPhotoIndex(undefined);
+          } else {
+            setSceneState('EXPLODE');
+          }
+        }} style={{ padding: '12px 30px', backgroundColor: 'rgba(0,0,0,0.5)', border: '1px solid rgba(255, 215, 0, 0.5)', color: '#FFD700', fontFamily: 'serif', fontSize: '14px', fontWeight: 'bold', letterSpacing: '3px', textTransform: 'uppercase', cursor: 'pointer', backdropFilter: 'blur(4px)' }}>
+           {sceneState === 'FORMED' ? 'Quỹ Đạo Ảnh' : 'Lắp Ráp Cây'}
+        </button>
+        <button onClick={() => {
+          setSceneState('HEART');
+          setSelectedPhotoIndex(undefined);
+        }} style={{ padding: '12px 20px', backgroundColor: 'rgba(255, 20, 147, 0.3)', border: '1px solid rgba(255, 20, 147, 0.5)', color: '#FF69B4', fontFamily: 'serif', fontSize: '14px', fontWeight: 'bold', cursor: 'pointer', backdropFilter: 'blur(4px)' }}>
+           ❤️ Trái Tim
         </button>
       </div>
 
@@ -595,10 +939,147 @@ export default function GrandTreeApp() {
         © by Pham Minh Kha
       </div>
 
-      {/* Overlay ảnh phóng to */}
-      <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.8)', zIndex: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: selectedPhoto ? 1 : 0, pointerEvents: selectedPhoto ? 'auto' : 'none', transition: 'opacity 0.5s ease' }} onClick={() => setSelectedPhoto(null)}>
-        {selectedPhoto && <img src={`/photos/${selectedPhoto}`} alt="Ảnh phóng to" style={{ maxWidth: '45%', maxHeight: '45%', border: '5px solid #FFD700', borderRadius: '10px', transform: selectedPhoto ? 'scale(1)' : 'scale(0.8)', transition: 'transform 0.5s ease' }} />}
-      </div>
+      {/* Overlay ảnh phóng to với hiệu ứng */}
+      {sceneState === 'PHOTO' && selectedPhotoIndex !== undefined && (
+        <div style={{ 
+          position: 'fixed', 
+          top: 0, 
+          left: 0, 
+          width: '100vw', 
+          height: '100vh', 
+          backgroundColor: 'rgba(0,0,0,0.9)', 
+          zIndex: 200, 
+          display: 'flex', 
+          flexDirection: 'column',
+          alignItems: 'center', 
+          justifyContent: 'center', 
+          pointerEvents: 'auto',
+          transition: 'opacity 0.5s ease'
+        }}>
+          <div style={{
+            position: 'relative',
+            maxWidth: '80vw',
+            maxHeight: '80vh',
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center'
+          }}>
+            {/* Ảnh với hiệu ứng fade và zoom */}
+            <div style={{
+              position: 'relative',
+              width: '100%',
+              height: '100%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}>
+              <img 
+                key={selectedPhotoIndex}
+                src={bodyPhotoPaths[selectedPhotoIndex]} 
+                alt={`Ảnh ${selectedPhotoIndex}`} 
+                style={{ 
+                  maxWidth: '100%',
+                  maxHeight: '70vh',
+                  border: '8px solid #FFD700', 
+                  borderRadius: '15px',
+                  boxShadow: '0 0 40px rgba(255, 215, 0, 0.8)',
+                  objectFit: 'contain',
+                  opacity: photoTransition === 'fadeOut' ? 0 : photoTransition === 'fadeIn' ? 1 : 1,
+                  transform: photoTransition === 'fadeIn' && slideDirection === 'right'
+                    ? 'translateX(0)' 
+                    : photoTransition === 'fadeIn' && slideDirection === 'left'
+                    ? 'translateX(0)'
+                    : photoTransition === 'fadeOut' && slideDirection === 'right'
+                    ? 'translateX(-30px)'
+                    : photoTransition === 'fadeOut' && slideDirection === 'left'
+                    ? 'translateX(30px)'
+                    : 'translateX(0)',
+                  transition: 'opacity 0.2s ease, transform 0.3s ease',
+                  filter: photoTransition === 'fadeIn' ? 'brightness(1)' : photoTransition === 'fadeOut' ? 'brightness(0.7)' : 'brightness(1)'
+                }} 
+              />
+              {/* Hiệu ứng ánh sáng xung quanh */}
+              <div style={{
+                position: 'absolute',
+                top: '50%',
+                left: '50%',
+                transform: 'translate(-50%, -50%)',
+                width: '100%',
+                height: '100%',
+                borderRadius: '15px',
+                background: 'radial-gradient(circle, rgba(255, 215, 0, 0.3) 0%, transparent 70%)',
+                pointerEvents: 'none',
+                animation: 'pulseGlow 2s ease-in-out infinite',
+                zIndex: -1
+              }} />
+            </div>
+            
+            {/* Thông tin ảnh với hiệu ứng */}
+            <div style={{
+              marginTop: '20px',
+              color: '#FFD700',
+              fontSize: '24px',
+              fontWeight: 'bold',
+              textShadow: '0 0 10px rgba(255, 215, 0, 0.8)',
+              textAlign: 'center',
+              opacity: photoTransition === 'fadeOut' ? 0 : 1,
+              transition: 'opacity 0.2s ease'
+            }}>
+              Ảnh {selectedPhotoIndex} / {bodyPhotoPaths.length - 1}
+            </div>
+            
+            {/* Thanh tiến trình */}
+            <div style={{
+              marginTop: '15px',
+              width: '400px',
+              height: '4px',
+              backgroundColor: 'rgba(255, 255, 255, 0.2)',
+              borderRadius: '2px',
+              overflow: 'hidden'
+            }}>
+              <div style={{
+                width: `${((selectedPhotoIndex) / (bodyPhotoPaths.length - 1)) * 100}%`,
+                height: '100%',
+                backgroundColor: '#FFD700',
+                borderRadius: '2px',
+                transition: 'width 0.5s ease',
+                boxShadow: '0 0 10px rgba(255, 215, 0, 0.8)'
+              }} />
+            </div>
+            
+            <div style={{
+              marginTop: '15px',
+              color: 'rgba(255, 255, 255, 0.7)',
+              fontSize: '14px',
+              textAlign: 'center',
+              maxWidth: '600px',
+              opacity: photoTransition === 'fadeOut' ? 0 : 1,
+              transition: 'opacity 0.3s ease'
+            }}>
+              👋 <b>Chỉ tay lên:</b> Xem ảnh &nbsp;|&nbsp; 
+              ➡️ <b>Tay phải:</b> Ảnh 1-15 &nbsp;|&nbsp; 
+              ⬅️ <b>Tay trái:</b> Ảnh 16-31 &nbsp;|&nbsp;
+              👍 <b>Thumb up:</b> Thoát
+            </div>
+          </div>
+        </div>
+      )}
+      
+      {/* CSS Animations */}
+      <style>{`
+        @keyframes pulseGlow {
+          0%, 100% {
+            opacity: 0.3;
+            transform: translate(-50%, -50%) scale(1);
+          }
+          50% {
+            opacity: 0.5;
+            transform: translate(-50%, -50%) scale(1.05);
+          }
+        }
+      `}</style>
+        </React.Fragment>
+      )}
     </div>
   );
 }

@@ -1,17 +1,20 @@
-# 🎄 Cây Thông Noel 3D Tương Tác Sang Trọng Cao Cấp
+# 🎄 Cây Thông Noel 3D Tương Tác Sang Trọng Cao Cấp - Enhanced Edition
 
-> Một ứng dụng web cây thông Noel 3D chất lượng cao dựa trên **React**, **Three.js (R3F)** và **nhận dạng cử chỉ AI**.
+> Một ứng dụng web cây thông Noel 3D chất lượng cao dựa trên **React**, **Three.js (R3F)** và **nhận dạng cử chỉ AI**. Phiên bản kết hợp tốt nhất từ cả hai dự án!
 
-Dự án này không chỉ là một cây, mà là một phòng trưng bày tương tác lưu giữ kỷ niệm. Hàng trăm nghìn hạt, đèn màu rực rỡ và ảnh Polaroid lơ lửng cùng nhau tạo nên một cây thông Noel xa xỉ. Người dùng có thể kiểm soát hình dạng của cây (tập hợp/phân tán) và xoay góc nhìn thông qua cử chỉ, trải nghiệm bữa tiệc thị giác cấp độ phim.
+Dự án này không chỉ là một cây, mà là một phòng trưng bày tương tác lưu giữ kỷ niệm. Hàng trăm nghìn hạt, đèn màu rực rỡ và ảnh Polaroid lơ lửng cùng nhau tạo nên một cây thông Noel xa xỉ. Người dùng có thể kiểm soát hình dạng của cây (tập hợp/phân tán), tạo hình trái tim, xem ảnh quỹ đạo và phóng to ảnh thông qua cử chỉ, trải nghiệm bữa tiệc thị giác cấp độ phim.
 
 ![Project Preview](public/preview.png)
 *(Lưu ý: Đề xuất tải lên một ảnh chụp màn hình chạy dự án của bạn ở đây)*
 
 ## ✨ Tính Năng Cốt Lõi
 
-* **Trải Nghiệm Thị Giác Cực Đỉnh**: Thân cây được tạo thành từ hơn 45,000 hạt phát sáng, kết hợp với hiệu ứng ánh sáng động (Bloom) và hiệu ứng lấp lánh, tạo ra không khí mơ màng.
+* **Trải Nghiệm Thị Giác Cực Đỉnh**: Thân cây được tạo thành từ hơn 15,000 hạt phát sáng, kết hợp với hiệu ứng ánh sáng động (Bloom) và hiệu ứng lấp lánh, tạo ra không khí mơ màng.
 * **Phòng Trưng Bày Kỷ Niệm**: Ảnh được treo lơ lửng trên cây theo phong cách "Polaroid", mỗi tấm là một vật thể phát sáng độc lập, hỗ trợ kết xuất hai mặt.
 * **Kiểm Soát Cử Chỉ AI**: Không cần chuột, chỉ cần sử dụng camera để bắt cử chỉ để kiểm soát hình dạng của cây (tập hợp/phân tán) và xoay góc nhìn.
+* **✨ MỚI: Chế Độ Hình Trái Tim**: Sử dụng hai tay để tạo hình trái tim với text "I LOVE YOU" ❤️
+* **✨ MỚI: Chế Độ Quỹ Đạo Ảnh**: Ảnh bay quanh cây theo quỹ đạo tròn, có thể phóng to từng ảnh
+* **✨ MỚI: Text "MERRY CHRISTMAS"**: Hiển thị khi cây được tập hợp hoàn chỉnh
 * **Chi Tiết Phong Phú**: Bao gồm đèn màu nhấp nháy động, tuyết vàng bạc rơi, và quà tặng Giáng sinh và trang trí kẹo phân bố ngẫu nhiên.
 * **Tùy Chỉnh Cao**: **Hỗ trợ người dùng dễ dàng thay thế bằng ảnh của riêng mình, và tự do điều chỉnh số lượng ảnh.**
 
@@ -47,10 +50,12 @@ Sau khi khởi động dự án, mở trình duyệt và truy cập địa chỉ
 
 ### Sử Dụng Cử Chỉ
 Đứng trước camera (đảm bảo quyền truy cập camera đã được cấp). Sử dụng cử chỉ để tương tác:
-- **Mở lòng bàn tay**: Phân tán cây thành các hạt bay lượn.
-- **Siết chặt nắm đấm**: Tập hợp tất cả thành cây hoàn chỉnh.
-- **Di chuyển tay trái/phải**: Xoay góc nhìn cây.
-- **Di chuyển tay lên/xuống**: Nghiêng góc nhìn.
+- **🖐 Mở lòng bàn tay**: Chuyển sang chế độ quỹ đạo ảnh (EXPLODE)
+- **✊ Siết chặt nắm đấm**: Tập hợp tất cả thành cây hoàn chỉnh (FORMED)
+- **👋 Chỉ tay lên**: Phóng to ảnh ngẫu nhiên (PHOTO)
+- **❤️ Hai tay tạo hình trái tim**: Tạo hình trái tim với text "I LOVE YOU" (HEART)
+- **Di chuyển tay trái/phải**: Xoay góc nhìn cây
+- **Di chuyển tay lên/xuống**: Nghiêng góc nhìn
 
 ### Tùy Chỉnh Và Mở Rộng
 - Thay đổi ảnh trong `public/photos/` để cá nhân hóa.
