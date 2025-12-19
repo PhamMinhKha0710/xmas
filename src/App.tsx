@@ -424,7 +424,7 @@ const Experience = ({ sceneState, rotationSpeed }: { sceneState: 'CHAOS' | 'FORM
 
 // --- Bộ điều khiển cử chỉ ---
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-const GestureController = ({ onGesture, onMove, onStatus, debugMode }: any) => {
+const GestureController = ({ onGesture, onMove, onStatus, debugMode, onSelectPhoto, bodyPhotoPaths, selectedPhoto }: any) => {
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
@@ -480,11 +480,19 @@ const GestureController = ({ onGesture, onMove, onStatus, debugMode }: any) => {
               const name = results.gestures[0][0].categoryName; const score = results.gestures[0][0].score;
               if (score > 0.4) {
                  if (name === "Open_Palm") onGesture("CHAOS"); if (name === "Closed_Fist") onGesture("FORMED");
+                 if (name === "Pointing_Up") onSelectPhoto(bodyPhotoPaths[Math.floor(Math.random() * bodyPhotoPaths.length)].replace('/photos/', '')); // Phóng to ảnh ngẫu nhiên khi chỉ tay
                  if (debugMode) onStatus(`PHÁT HIỆN: ${name}`);
               }
               if (results.landmarks.length > 0) {
-                const speed = (0.5 - results.landmarks[0][0].x) * 0.15;
-                onMove(Math.abs(speed) > 0.01 ? speed : 0);
+                if (selectedPhoto) {
+                  const x = results.landmarks[0][0].x;
+                  const index = Math.floor(x * bodyPhotoPaths.length);
+                  const clampedIndex = Math.min(Math.max(index, 0), bodyPhotoPaths.length - 1);
+                  onSelectPhoto(bodyPhotoPaths[clampedIndex].replace('/photos/', ''));
+                } else {
+                  const speed = (0.5 - results.landmarks[0][0].x) * 0.15;
+                  onMove(Math.abs(speed) > 0.01 ? speed : 0);
+                }
               }
             } else { onMove(0); if (debugMode) onStatus("AI SẴN SÀNG: KHÔNG CÓ TAY"); }
         }
@@ -509,6 +517,7 @@ export default function GrandTreeApp() {
   const [rotationSpeed, setRotationSpeed] = useState(0);
   const [aiStatus, setAiStatus] = useState("INITIALIZING...");
   const [debugMode, setDebugMode] = useState(false);
+  const [selectedPhoto, setSelectedPhoto] = useState<string | null>(null);
 
   return (
     <div style={{ width: '100vw', height: '100vh', backgroundColor: '#000', position: 'relative', overflow: 'hidden' }}>
@@ -517,7 +526,7 @@ export default function GrandTreeApp() {
             <Experience sceneState={sceneState} rotationSpeed={rotationSpeed} />
         </Canvas>
       </div>
-      <GestureController onGesture={setSceneState} onMove={setRotationSpeed} onStatus={setAiStatus} debugMode={debugMode} />
+      <GestureController onGesture={setSceneState} onMove={setRotationSpeed} onStatus={setAiStatus} debugMode={debugMode} onSelectPhoto={setSelectedPhoto} bodyPhotoPaths={bodyPhotoPaths} selectedPhoto={selectedPhoto} />
 
       {/* UI - Thống kê */}
       <div style={{ position: 'absolute', bottom: '30px', left: '40px', color: '#888', zIndex: 10, fontFamily: 'sans-serif', userSelect: 'none' }}>
@@ -548,6 +557,11 @@ export default function GrandTreeApp() {
       {/* UI - Trạng thái AI */}
       <div style={{ position: 'absolute', top: '20px', left: '50%', transform: 'translateX(-50%)', color: aiStatus.includes('LỖI') ? '#FF0000' : 'rgba(255, 215, 0, 0.4)', fontSize: '10px', letterSpacing: '2px', zIndex: 10, background: 'rgba(0,0,0,0.5)', padding: '4px 8px', borderRadius: '4px' }}>
         {aiStatus}
+      </div>
+
+      {/* Overlay ảnh phóng to */}
+      <div style={{ position: 'fixed', top: 0, left: 0, width: '100vw', height: '100vh', backgroundColor: 'rgba(0,0,0,0.8)', zIndex: 20, display: 'flex', alignItems: 'center', justifyContent: 'center', opacity: selectedPhoto ? 1 : 0, pointerEvents: selectedPhoto ? 'auto' : 'none', transition: 'opacity 0.5s ease' }} onClick={() => setSelectedPhoto(null)}>
+        {selectedPhoto && <img src={`/photos/${selectedPhoto}`} alt="Ảnh phóng to" style={{ maxWidth: '45%', maxHeight: '45%', border: '5px solid #FFD700', borderRadius: '10px', transform: selectedPhoto ? 'scale(1)' : 'scale(0.8)', transition: 'transform 0.5s ease' }} />}
       </div>
     </div>
   );
