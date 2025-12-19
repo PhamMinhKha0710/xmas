@@ -16,40 +16,40 @@ import { MathUtils } from 'three';
 import * as random from 'maath/random';
 import { GestureRecognizer, FilesetResolver, DrawingUtils } from "@mediapipe/tasks-vision";
 
-// --- 动态生成照片列表 (top.jpg + 1.jpg 到 31.jpg) ---
+// --- Tạo động danh sách ảnh (top.jpg + 1.jpg đến 31.jpg) ---
 const TOTAL_NUMBERED_PHOTOS = 31;
-// 修改：将 top.jpg 加入到数组开头
+// Sửa đổi: Thêm top.jpg vào đầu mảng
 const bodyPhotoPaths = [
   '/photos/top.jpg',
   ...Array.from({ length: TOTAL_NUMBERED_PHOTOS }, (_, i) => `/photos/${i + 1}.jpg`)
 ];
 
-// --- 视觉配置 ---
+// --- Cấu hình thị giác ---
 const CONFIG = {
   colors: {
-    emerald: '#004225', // 纯正祖母绿
+    emerald: '#004225', // Màu lục bảo nguyên chất
     gold: '#FFD700',
     silver: '#ECEFF1',
     red: '#D32F2F',
     green: '#2E7D32',
-    white: '#FFFFFF',   // 纯白色
+    white: '#FFFFFF',   // Màu trắng nguyên chất
     warmLight: '#FFD54F',
-    lights: ['#FF0000', '#00FF00', '#0000FF', '#FFFF00'], // 彩灯
-    // 拍立得边框颜色池 (复古柔和色系)
+    lights: ['#FF0000', '#00FF00', '#0000FF', '#FFFF00'], // Đèn màu
+    // Hồ màu viền Polaroid (gam màu cổ điển nhẹ nhàng)
     borders: ['#FFFAF0', '#F0E68C', '#E6E6FA', '#FFB6C1', '#98FB98', '#87CEFA', '#FFDAB9'],
-    // 圣诞元素颜色
+    // Màu sắc yếu tố Giáng sinh
     giftColors: ['#D32F2F', '#FFD700', '#1976D2', '#2E7D32'],
     candyColors: ['#FF0000', '#FFFFFF']
   },
   counts: {
     foliage: 15000,
-    ornaments: 300,   // 拍立得照片数量
-    elements: 200,    // 圣诞元素数量
-    lights: 400       // 彩灯数量
+    ornaments: 300,   // Số lượng ảnh Polaroid
+    elements: 200,    // Số lượng yếu tố Giáng sinh
+    lights: 400       // Số lượng đèn màu
   },
-  tree: { height: 22, radius: 9 }, // 树体尺寸
+  tree: { height: 22, radius: 9 }, // Kích thước thân cây
   photos: {
-    // top 属性不再需要，因为已经移入 body
+    // Thuộc tính top không còn cần thiết, vì đã chuyển vào body
     body: bodyPhotoPaths
   }
 };
@@ -79,7 +79,7 @@ const FoliageMaterial = shaderMaterial(
 );
 extend({ FoliageMaterial });
 
-// --- Helper: Tree Shape ---
+// --- Helper: Hình dạng cây ---
 const getTreePosition = () => {
   const h = CONFIG.tree.height; const rBase = CONFIG.tree.radius;
   const y = (Math.random() * h) - (h / 2); const normalizedY = (y + (h/2)) / h;
@@ -88,7 +88,7 @@ const getTreePosition = () => {
   return [r * Math.cos(theta), y, r * Math.sin(theta)];
 };
 
-// --- Component: Foliage ---
+// --- Component: Lá cây ---
 const Foliage = ({ state }: { state: 'CHAOS' | 'FORMED' }) => {
   const materialRef = useRef<any>(null);
   const { positions, targetPositions, randoms } = useMemo(() => {
@@ -123,7 +123,7 @@ const Foliage = ({ state }: { state: 'CHAOS' | 'FORMED' }) => {
   );
 };
 
-// --- Component: Photo Ornaments (Double-Sided Polaroid) ---
+// --- Component: Trang trí ảnh (Polaroid hai mặt) ---
 const PhotoOrnaments = ({ state }: { state: 'CHAOS' | 'FORMED' }) => {
   const textures = useTexture(CONFIG.photos.body);
   const count = CONFIG.counts.ornaments;
@@ -233,7 +233,7 @@ const PhotoOrnaments = ({ state }: { state: 'CHAOS' | 'FORMED' }) => {
   );
 };
 
-// --- Component: Christmas Elements ---
+// --- Component: Yếu tố Giáng sinh ---
 const ChristmasElements = ({ state }: { state: 'CHAOS' | 'FORMED' }) => {
   const count = CONFIG.counts.elements;
   const groupRef = useRef<THREE.Group>(null);
@@ -288,7 +288,7 @@ const ChristmasElements = ({ state }: { state: 'CHAOS' | 'FORMED' }) => {
   );
 };
 
-// --- Component: Fairy Lights ---
+// --- Component: Đèn tiên ---
 const FairyLights = ({ state }: { state: 'CHAOS' | 'FORMED' }) => {
   const count = CONFIG.counts.lights;
   const groupRef = useRef<THREE.Group>(null);
@@ -330,7 +330,7 @@ const FairyLights = ({ state }: { state: 'CHAOS' | 'FORMED' }) => {
   );
 };
 
-// --- Component: Top Star (No Photo, Pure Gold 3D Star) ---
+// --- Component: Ngôi sao trên đỉnh (Không có ảnh, Ngôi sao vàng 3D nguyên chất) ---
 const TopStar = ({ state }: { state: 'CHAOS' | 'FORMED' }) => {
   const groupRef = useRef<THREE.Group>(null);
 
@@ -379,7 +379,7 @@ const TopStar = ({ state }: { state: 'CHAOS' | 'FORMED' }) => {
   );
 };
 
-// --- Main Scene Experience ---
+// --- Trải nghiệm cảnh chính ---
 const Experience = ({ sceneState, rotationSpeed }: { sceneState: 'CHAOS' | 'FORMED', rotationSpeed: number }) => {
   const controlsRef = useRef<any>(null);
   useFrame(() => {
@@ -422,7 +422,7 @@ const Experience = ({ sceneState, rotationSpeed }: { sceneState: 'CHAOS' | 'FORM
   );
 };
 
-// --- Gesture Controller ---
+// --- Bộ điều khiển cử chỉ ---
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
 const GestureController = ({ onGesture, onMove, onStatus, debugMode }: any) => {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -433,7 +433,7 @@ const GestureController = ({ onGesture, onMove, onStatus, debugMode }: any) => {
     let requestRef: number;
 
     const setup = async () => {
-      onStatus("DOWNLOADING AI...");
+      onStatus("ĐANG TẢI AI...");
       try {
         const vision = await FilesetResolver.forVisionTasks("https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.3/wasm");
         gestureRecognizer = await GestureRecognizer.createFromOptions(vision, {
@@ -444,20 +444,20 @@ const GestureController = ({ onGesture, onMove, onStatus, debugMode }: any) => {
           runningMode: "VIDEO",
           numHands: 1
         });
-        onStatus("REQUESTING CAMERA...");
+        onStatus("ĐANG YÊU CẦU CAMERA...");
         if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
           const stream = await navigator.mediaDevices.getUserMedia({ video: true });
           if (videoRef.current) {
             videoRef.current.srcObject = stream;
             videoRef.current.play();
-            onStatus("AI READY: SHOW HAND");
+            onStatus("AI SẴN SÀNG: HÃY GIỠ TAY");
             predictWebcam();
           }
         } else {
-            onStatus("ERROR: CAMERA PERMISSION DENIED");
+            onStatus("LỖI: TỪ CHỐI QUYỀN TRUY CẬP CAMERA");
         }
       } catch (err: any) {
-        onStatus(`ERROR: ${err.message || 'MODEL FAILED'}`);
+        onStatus(`LỖI: ${err.message || 'MÔ HÌNH THẤT BẠI'}`);
       }
     };
 
@@ -480,13 +480,13 @@ const GestureController = ({ onGesture, onMove, onStatus, debugMode }: any) => {
               const name = results.gestures[0][0].categoryName; const score = results.gestures[0][0].score;
               if (score > 0.4) {
                  if (name === "Open_Palm") onGesture("CHAOS"); if (name === "Closed_Fist") onGesture("FORMED");
-                 if (debugMode) onStatus(`DETECTED: ${name}`);
+                 if (debugMode) onStatus(`PHÁT HIỆN: ${name}`);
               }
               if (results.landmarks.length > 0) {
                 const speed = (0.5 - results.landmarks[0][0].x) * 0.15;
                 onMove(Math.abs(speed) > 0.01 ? speed : 0);
               }
-            } else { onMove(0); if (debugMode) onStatus("AI READY: NO HAND"); }
+            } else { onMove(0); if (debugMode) onStatus("AI SẴN SÀNG: KHÔNG CÓ TAY"); }
         }
         requestRef = requestAnimationFrame(predictWebcam);
       }
@@ -503,7 +503,7 @@ const GestureController = ({ onGesture, onMove, onStatus, debugMode }: any) => {
   );
 };
 
-// --- App Entry ---
+// --- Điểm vào ứng dụng ---
 export default function GrandTreeApp() {
   const [sceneState, setSceneState] = useState<'CHAOS' | 'FORMED'>('CHAOS');
   const [rotationSpeed, setRotationSpeed] = useState(0);
@@ -519,34 +519,34 @@ export default function GrandTreeApp() {
       </div>
       <GestureController onGesture={setSceneState} onMove={setRotationSpeed} onStatus={setAiStatus} debugMode={debugMode} />
 
-      {/* UI - Stats */}
+      {/* UI - Thống kê */}
       <div style={{ position: 'absolute', bottom: '30px', left: '40px', color: '#888', zIndex: 10, fontFamily: 'sans-serif', userSelect: 'none' }}>
         <div style={{ marginBottom: '15px' }}>
-          <p style={{ fontSize: '10px', letterSpacing: '2px', textTransform: 'uppercase', marginBottom: '4px' }}>Memories</p>
+          <p style={{ fontSize: '10px', letterSpacing: '2px', textTransform: 'uppercase', marginBottom: '4px' }}>Ký Ức</p>
           <p style={{ fontSize: '24px', color: '#FFD700', fontWeight: 'bold', margin: 0 }}>
             {CONFIG.counts.ornaments.toLocaleString()} <span style={{ fontSize: '10px', color: '#555', fontWeight: 'normal' }}>POLAROIDS</span>
           </p>
         </div>
         <div>
-          <p style={{ fontSize: '10px', letterSpacing: '2px', textTransform: 'uppercase', marginBottom: '4px' }}>Foliage</p>
+          <p style={{ fontSize: '10px', letterSpacing: '2px', textTransform: 'uppercase', marginBottom: '4px' }}>Lá Cây</p>
           <p style={{ fontSize: '24px', color: '#004225', fontWeight: 'bold', margin: 0 }}>
-            {(CONFIG.counts.foliage / 1000).toFixed(0)}K <span style={{ fontSize: '10px', color: '#555', fontWeight: 'normal' }}>EMERALD NEEDLES</span>
+            {(CONFIG.counts.foliage / 1000).toFixed(0)}K <span style={{ fontSize: '10px', color: '#555', fontWeight: 'normal' }}>CHIỀU KIM CƯƠNG LỤC BẢO</span>
           </p>
         </div>
       </div>
 
-      {/* UI - Buttons */}
+      {/* UI - Nút */}
       <div style={{ position: 'absolute', bottom: '30px', right: '40px', zIndex: 10, display: 'flex', gap: '10px' }}>
         <button onClick={() => setDebugMode(!debugMode)} style={{ padding: '12px 15px', backgroundColor: debugMode ? '#FFD700' : 'rgba(0,0,0,0.5)', border: '1px solid #FFD700', color: debugMode ? '#000' : '#FFD700', fontFamily: 'sans-serif', fontSize: '12px', fontWeight: 'bold', cursor: 'pointer', backdropFilter: 'blur(4px)' }}>
-           {debugMode ? 'HIDE DEBUG' : '🛠 DEBUG'}
+           {debugMode ? 'ẨN DEBUG' : '🛠 DEBUG'}
         </button>
         <button onClick={() => setSceneState(s => s === 'CHAOS' ? 'FORMED' : 'CHAOS')} style={{ padding: '12px 30px', backgroundColor: 'rgba(0,0,0,0.5)', border: '1px solid rgba(255, 215, 0, 0.5)', color: '#FFD700', fontFamily: 'serif', fontSize: '14px', fontWeight: 'bold', letterSpacing: '3px', textTransform: 'uppercase', cursor: 'pointer', backdropFilter: 'blur(4px)' }}>
-           {sceneState === 'CHAOS' ? 'Assemble Tree' : 'Disperse'}
+           {sceneState === 'CHAOS' ? 'Lắp Ráp Cây' : 'Phân Tán'}
         </button>
       </div>
 
-      {/* UI - AI Status */}
-      <div style={{ position: 'absolute', top: '20px', left: '50%', transform: 'translateX(-50%)', color: aiStatus.includes('ERROR') ? '#FF0000' : 'rgba(255, 215, 0, 0.4)', fontSize: '10px', letterSpacing: '2px', zIndex: 10, background: 'rgba(0,0,0,0.5)', padding: '4px 8px', borderRadius: '4px' }}>
+      {/* UI - Trạng thái AI */}
+      <div style={{ position: 'absolute', top: '20px', left: '50%', transform: 'translateX(-50%)', color: aiStatus.includes('LỖI') ? '#FF0000' : 'rgba(255, 215, 0, 0.4)', fontSize: '10px', letterSpacing: '2px', zIndex: 10, background: 'rgba(0,0,0,0.5)', padding: '4px 8px', borderRadius: '4px' }}>
         {aiStatus}
       </div>
     </div>
